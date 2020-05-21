@@ -157,10 +157,10 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
     let key = tcod.root.wait_for_keypress(true);
     match key {
     // player movement keys
-        Key { code: Up, .. } => objects[0].move_by(0, -1, game),
-        Key { code: Down, .. } => objects[0].move_by(0, 1, game),
-        Key { code: Left, .. } => objects[0].move_by(-1, 0, game),
-        Key { code: Right, .. } => objects[0].move_by(1, 0, game),
+        Key { code: Up, .. } => objects[PLAYER].move_by(0, -1, game),
+        Key { code: Down, .. } => objects[PLAYER].move_by(0, 1, game),
+        Key { code: Left, .. } => objects[PLAYER].move_by(-1, 0, game),
+        Key { code: Right, .. } => objects[PLAYER].move_by(1, 0, game),
         Key { code: Enter, alt:true, .. } => {
             let fullscreen = tcod.root.is_fullscreen();
             tcod.root.set_fullscreen(!fullscreen);
