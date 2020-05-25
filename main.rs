@@ -362,6 +362,46 @@ fn make_map(objects: &mut Vec<Object>) -> Map {
     return map;
 }
 
+// test, whether play has touched the npc
+fn can_survive(objects: &mut Vec<Object>) -> bool{
+    let player = &objects[0];
+    let npc = &objects[1];
+
+    if (player.x == npc.x) && (player.y == npc.y){
+        println!("Cannot survive!\n");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+#[allow(dead_code)]
+fn AI_follow_player(objects: &mut [Object], game: &mut Game){
+
+    let dis_x = &objects[0].x - &objects[1].x;
+    let dis_y = &objects[0].y - &objects[1].y;
+    println!("dis_x: {:?}", dis_x);
+    println!("dis_y: {:?}", dis_y);
+    println!("object_x: {:?}",objects[0].x);
+
+    let random = rand::thread_rng().gen_range(0, 2);
+    if(random == 1){
+        if(dis_y != 0){
+            objects[1].move_by(0, &dis_y / &dis_y.abs(), game);
+        }
+    }else{
+        if(dis_x != 0){
+            objects[1].move_by(&dis_x / &dis_x.abs(), 0, game);
+        }
+    }
+
+    use std::{thread, time};
+    
+    let ten_millis = time::Duration::from_millis(10);
+
+    thread::sleep(ten_millis);
+}
+
 fn main() {
 
     //Window
@@ -395,9 +435,7 @@ fn main() {
     let arrow = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['R','S','T','U']);
 
     // the list of objects with those two
-    let mut objects: Vec<Object> = vec![player, npc, sword, shovel, bucket, bow, arrow];
-      
-
+    let mut objects: Vec<Object> = vec![player, npc, sword, shovel, bucket, bow, arrow];     
 
     let mut game = Game {
         // generate map (at this point it's not drawn to the screen)
@@ -407,7 +445,7 @@ fn main() {
     //game loop
     while !tcod.root.window_closed() {
         tcod.con.clear();
-        
+
         animation(&mut objects);
         render_all(&mut tcod, &game, &mut objects);
         
@@ -416,7 +454,9 @@ fn main() {
         // handle keys and exit game if needed
         let exit = handle_keys(&mut tcod, &mut game, &mut objects);
 
-        if exit {break}
+        AI_follow_player(&mut objects, &mut game);
+        
+        if exit || can_survive(&mut objects) {break}
     }
 
 }
