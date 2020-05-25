@@ -1,10 +1,15 @@
 [package]
-name = "game"
+name = "roguelike"
 version = "0.1.0"
-authors = ["thore"]
+authors = ["qianli99"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tcod = "0.15"
+rand = "0.3.9"
+
+[dependencies.tcod-sys]
+version = "*"
+features = ["dynlib"]
