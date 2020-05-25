@@ -300,7 +300,7 @@ fn create_v_tunnel(y1: i32, y2: i32, x: i32, map: &mut Map) {
 }
 
 
-fn make_map(player: &mut Object) -> Map {
+fn make_map(objects: &mut Vec<Object>) -> Map {
     // fill map with "blocked" tiles
     let mut map = vec![vec![Tile::wall(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
     
@@ -330,8 +330,11 @@ fn make_map(player: &mut Object) -> Map {
 
             if rooms.is_empty() {
                 // this is the first room, where the player starts at
-                player.x = new_x;
-                player.y = new_y;
+                objects[0].x = new_x;
+                objects[0].y = new_y;
+
+                objects[1].x = rand::thread_rng().gen_range(new_room.x1 + 1, new_room.x2);
+                objects[1].y = rand::thread_rng().gen_range(new_room.y1 + 1, new_room.y2);
             } else {
                 // all rooms after the first:
                 // connect it to the previous room with a tunnel
@@ -382,7 +385,7 @@ fn main() {
     let player = Object::new(0, 0, '@', WHITE, true, (0,1), 3, ['A','B','C','D']);
 
     // create a NPC
-    let npc = Object::new(25, 20, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
+    let npc = Object::new(0, 0, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
 
     // create a Weapon
     let sword = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['E','F','G','H']);
@@ -398,7 +401,7 @@ fn main() {
 
     let mut game = Game {
         // generate map (at this point it's not drawn to the screen)
-        map: make_map(&mut objects[0]),
+        map: make_map(&mut objects),
     };    
 
     //game loop
@@ -415,4 +418,5 @@ fn main() {
 
         if exit {break}
     }
+
 }
