@@ -6,9 +6,15 @@ const MAP_WIDTH: i32 = 80;
 const MAP_HEIGHT: i32 = 50;
 const MAP_START_HEIGHT: i32 = 1;
 
+const ROOM_MAX_SIZE: i32 = 10;
+const ROOM_MIN_SIZE: i32 = 6;
+const MAX_ROOM: i32 = 30;
+
 // frame limit
 const LIMIT_FPS: i32 = 60;
 
+use std::cmp;
+use rand::Rng;
 use tcod::colors::*;
 use tcod::console::*;
 
@@ -97,6 +103,7 @@ impl Tile {
 }
 
 type Map = Vec<Vec<Tile>>;
+
 struct Game {
     map: Map,
 }
@@ -125,8 +132,8 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
     //draw hud stats
     tcod.con.set_default_foreground(WHITE);
     let health = objects[PLAYER].health;
-    let dirt = objects[BUCKET].health-1;
-    let bow = objects[BOW].health-1;
+    let dirt = objects[BUCKET].health - 1;
+    let bow = objects[BOW].health - 1;
     let enemys = 0;
     tcod.con.print_ex(0, 0, BackgroundFlag::None, TextAlignment::Left, &format!("V: {}    M: {}    S: {}    W: {}", health,dirt,bow,enemys));
 
@@ -146,10 +153,10 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
 fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> bool {
 
     //hide weapons
-    objects[SWORD].visable=false;
-    objects[SHOWEL].visable=false;
-    objects[BUCKET].visable=false;
-    objects[BOW].visable=false;
+    objects[SWORD].visable = false;
+    objects[SHOWEL].visable = false;
+    objects[BUCKET].visable = false;
+    objects[BOW].visable = false;
 
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
@@ -172,15 +179,15 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         //Sword
         Key { code: Spacebar,.. } => {
             objects[SWORD].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[SWORD].visable=true;
+            objects[SWORD].visable = true;
         }
 
         //Showel
         Key { code: Number1,.. } => {
             objects[SHOWEL].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[SHOWEL].visable=true;
+            objects[SHOWEL].visable = true;
             if game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize].blocked {
-                objects[BUCKET].health +=1;
+                objects[BUCKET].health += 1;
                 game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize] = Tile::empty();
             };
         }
@@ -188,9 +195,9 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         //Bucket
         Key { code: Number2,.. } => {
             objects[BUCKET].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[BUCKET].visable=true;
-            if objects[BUCKET].health>1 {
-                objects[BUCKET].health -=1;
+            objects[BUCKET].visable = true;
+            if objects[BUCKET].health > 1 {
+                objects[BUCKET].health -= 1;
                 game.map[(objects[BUCKET].x) as usize][(objects[BUCKET].y) as usize] = Tile::wall();
             }
         }
@@ -198,9 +205,9 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         //Bow
         Key { code: Number3,.. } => {
             objects[BOW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[BOW].visable=true;
-            if objects[BOW].health>1 {
-                objects[BOW].health -=1;
+            objects[BOW].visable = true;
+            if objects[BOW].health > 1 {
+                objects[BOW].health -= 1 ;
                 objects[ARROW].visable = true;
                 objects[ARROW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
             }
@@ -213,10 +220,11 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
     if objects[ARROW].visable {
         objects[ARROW].move_by(objects[ARROW].direction.0,objects[ARROW].direction.1, game);
     }
+
     //pick up arrow
     if objects[PLAYER].collision(&objects[ARROW]) && objects[ARROW].visable{
-        objects[ARROW].visable=false;
-        objects[BOW].health+=1;
+        objects[ARROW].visable = false;
+        objects[BOW].health += 1;
     }
 
     return false;
@@ -235,14 +243,118 @@ fn animation(objects: &mut [Object]){
     }
 }
 
+// A rectangle on the map, used to characterise a room.
+#[derive(Clone, Copy, Debug)]
+struct Rect {
+    x1: i32,
+    y1: i32,
+    x2: i32,
+    y2: i32,
+}
 
-fn make_map() -> Map {
-    // fill map with "unblocked" tiles
-    let mut map = vec![vec![Tile::empty(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
+impl Rect {
+    pub fn new(x: i32, y: i32, w: i32, h: i32) -> Self {
+        Rect {
+            x1: x,
+            y1: y,
+            x2: x + w,
+            y2: y + h,
+        }
+    }
 
-    // place two pillars to test the map
-    map[30][22] = Tile::wall();
-    map[50][22] = Tile::wall();
+    pub fn center(&self) -> (i32, i32){
+        let center_x = (self.x1 + self.x2) / 2;
+        let center_y = (self.y1 + self.y2) / 2;
+        (center_x, center_y)
+    }
+
+    pub fn intersects_with(&self, other: &Rect) -> bool{
+        (self.x1 <= other.x2) 
+        && (self.x2 >= other.x1)
+        && (self.y1 <= other.y2)
+        && (self.y2 >= other.y1) 
+    }
+}
+
+fn create_room(room: Rect, map: &mut Map) {
+    // go through the tiles in the rectangle and make them passable
+    for x in (room.x1 + 1)..room.x2 {
+        for y in (room.y1 + 1)..room.y2 {
+            map[x as usize][y as usize] = Tile::empty();
+        }
+    }
+}
+
+fn create_h_tunnel(x1: i32, x2: i32, y: i32, map: &mut Map) {
+    // horizontal tunnel. `min()` and `max()` are used in case `x1 > x2`
+    for x in cmp::min(x1, x2)..(cmp::max(x1, x2) + 1) {
+        map[x as usize][y as usize] = Tile::empty();
+    }
+}
+
+fn create_v_tunnel(y1: i32, y2: i32, x: i32, map: &mut Map) {
+    // vertical tunnel
+    for y in cmp::min(y1, y2)..(cmp::max(y1, y2) + 1) {
+        map[x as usize][y as usize] = Tile::empty();
+    }
+}
+
+
+fn make_map(player: &mut Object) -> Map {
+    // fill map with "blocked" tiles
+    let mut map = vec![vec![Tile::wall(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
+    
+    let mut rooms = vec![];
+
+    for _ in 0..MAX_ROOM{
+        let w = rand::thread_rng().gen_range(ROOM_MIN_SIZE, ROOM_MAX_SIZE + 1);
+        let h = rand::thread_rng().gen_range(ROOM_MIN_SIZE, ROOM_MAX_SIZE + 1);
+       
+        let x = rand::thread_rng().gen_range(0, MAP_WIDTH - w);
+        let y = rand::thread_rng().gen_range(0, MAP_HEIGHT - h);
+
+        let new_room = Rect::new(x, y, w, h); 
+        // run through the other rooms and see if they intersect with this one
+        let failed = rooms
+            .iter()
+            .any(|other_room| new_room.intersects_with(other_room));
+
+        if !failed {
+            // this means there are no intersections, so this room is valid
+
+            // "paint" it to the map's tiles
+            create_room(new_room, &mut map);
+
+            // center coordinates of the new room, will be useful later
+            let (new_x, new_y) = new_room.center();
+
+            if rooms.is_empty() {
+                // this is the first room, where the player starts at
+                player.x = new_x;
+                player.y = new_y;
+            } else {
+                // all rooms after the first:
+                // connect it to the previous room with a tunnel
+
+                // center coordinates of the previous room
+                let (prev_x, prev_y) = rooms[rooms.len() - 1].center();
+
+                // toss a coin (random bool value -- either true or false)
+                if rand::random() {
+                    // first move horizontally, then vertically
+                    create_h_tunnel(prev_x, new_x, prev_y, &mut map);
+                    create_v_tunnel(prev_y, new_y, new_x, &mut map);
+                } else {
+                    // first move vertically, then horizontally
+                    create_v_tunnel(prev_y, new_y, prev_x, &mut map);
+                    create_h_tunnel(prev_x, new_x, new_y, &mut map);
+                }
+            }
+
+            // finally, append the new room to the list
+            rooms.push(new_room);
+        }    
+    }
 
     return map;
 }
@@ -267,10 +379,10 @@ fn main() {
     tcod::system::set_fps(LIMIT_FPS);
 
     // create object representing the player
-    let player = Object::new(SCREEN_WIDTH / 2+1, SCREEN_HEIGHT / 2, '@', WHITE, true, (0,1), 3, ['A','B','C','D']);
+    let player = Object::new(0, 0, '@', WHITE, true, (0,1), 3, ['A','B','C','D']);
 
     // create a NPC
-    let npc = Object::new(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
+    let npc = Object::new(25, 20, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
 
     // create a Weapon
     let sword = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['E','F','G','H']);
@@ -286,7 +398,7 @@ fn main() {
 
     let mut game = Game {
         // generate map (at this point it's not drawn to the screen)
-        map: make_map(),
+        map: make_map(&mut objects[0]),
     };    
 
     //game loop
@@ -303,5 +415,4 @@ fn main() {
 
         if exit {break}
     }
-
 }
