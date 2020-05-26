@@ -2,6 +2,7 @@
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
 // size of the map
+//thore: map_start für die statusanzeige hinzugefügt
 const MAP_WIDTH: i32 = 80;
 const MAP_HEIGHT: i32 = 50;
 const MAP_START_HEIGHT: i32 = 1;
@@ -21,6 +22,7 @@ use tcod::console::*;
 const COLOR_DARK_WALL: Color = Color { r: 0, g: 0, b: 100 };
 const COLOR_DARK_GROUND: Color = Color { r: 50,g: 50,b: 150 };
 
+//thore: constanten für übersichtlichere listen durchgänge hinzugefügt
 const PLAYER: usize = 0;
 const SWORD: usize = 2;
 const SHOWEL: usize = 3;
@@ -34,6 +36,7 @@ struct Tcod {
 }
 
 //Generic object for player, enemys, items etc..
+//thore: visable, direction health, images attributes added
 #[derive(Debug)]
 struct Object {
     x: i32,
@@ -46,6 +49,7 @@ struct Object {
     images: [char;4],
 }
 
+//thore: visable, direction health, images attributes added
 impl Object {
     pub fn new(x: i32, y: i32, char: char, color: Color, visable: bool, direction: (i32,i32), health: i32, images: [char;4]) -> Self {
         Object { x, y, char, color, visable, direction, health, images }
@@ -66,13 +70,13 @@ impl Object {
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
 
-    // update weapon cords
+    //thore: funktion erstellt für weapons, damit sie an der richtigen stelle erscheinen (vor den gegnern)
     pub fn update(&mut self, x:i32, y:i32, direction:(i32,i32)){
         self.x = x + direction.0;
         self.y = y + direction.1;
         self.direction = direction;
     }
-
+    //thore: collsions function, do two objects hit?
     pub fn collision(&self, object: &Object) -> bool{
         self.x == object.x && self.y == object.y
     }
@@ -110,12 +114,14 @@ struct Game {
 
 fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
     // draw all objects in the list
+    // thore: visable abfrage hinzugefügt, es muss sichtbar sein um gemalt zu werden
     for object in objects{
         if object.visable && object.health > 0{
             object.draw(&mut tcod.con);
         }
     }
     // go through all tiles, and set their background color
+    //thore: die map wird erst ab map_start angefangen zu zeichnen, damit platz für das hud ist
     for y in MAP_START_HEIGHT..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let wall = game.map[x as usize][y as usize].block_sight;
@@ -129,7 +135,7 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
         }
     }
 
-    //draw hud stats
+    //thore: draw the hud
     tcod.con.set_default_foreground(WHITE);
     let health = objects[PLAYER].health;
     let dirt = objects[BUCKET].health - 1;
@@ -152,7 +158,7 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
 
 fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> bool {
 
-    //hide weapons
+    //thore: hide weapons after each new frame
     objects[SWORD].visable = false;
     objects[SHOWEL].visable = false;
     objects[BUCKET].visable = false;
@@ -175,7 +181,7 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         Key { code:Escape,.. } => return true,
 
 
-    // weapon keys
+    //thore: key querys for weapons
         //Sword
         Key { code: Spacebar,.. } => {
             objects[SWORD].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
@@ -216,12 +222,12 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         _ => {}
     }
 
-    //move arrow
+    //thore: move arrow if visable
     if objects[ARROW].visable {
         objects[ARROW].move_by(objects[ARROW].direction.0,objects[ARROW].direction.1, game);
     }
 
-    //pick up arrow
+    //thore: pick up arrow if player stands on it
     if objects[PLAYER].collision(&objects[ARROW]) && objects[ARROW].visable{
         objects[ARROW].visable = false;
         objects[BOW].health += 1;
@@ -230,6 +236,7 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
     return false;
 }
 
+//thore: funktion die auf die direction eines objektes guckt und dann das richtige sprite auswählt
 fn animation(objects: &mut [Object]){
     for object in objects{
         let image = object.direction;
@@ -243,7 +250,7 @@ fn animation(objects: &mut [Object]){
     }
 }
 
-// A rectangle on the map, used to characterise a room.
+// Qianli: A rectangle on the map, used to characterise a room.
 #[derive(Clone, Copy, Debug)]
 struct Rect {
     x1: i32,
@@ -276,8 +283,8 @@ impl Rect {
     }
 }
 
+// Qianli: go through the tiles in the rectangle and make them passable
 fn create_room(room: Rect, map: &mut Map) {
-    // go through the tiles in the rectangle and make them passable
     for x in (room.x1 + 1)..room.x2 {
         for y in (room.y1 + 1)..room.y2 {
             map[x as usize][y as usize] = Tile::empty();
@@ -285,21 +292,21 @@ fn create_room(room: Rect, map: &mut Map) {
     }
 }
 
+// Qianli: horizontal tunnel. 
 fn create_h_tunnel(x1: i32, x2: i32, y: i32, map: &mut Map) {
-    // horizontal tunnel. `min()` and `max()` are used in case `x1 > x2`
     for x in cmp::min(x1, x2)..(cmp::max(x1, x2) + 1) {
         map[x as usize][y as usize] = Tile::empty();
     }
 }
 
+// Qianli: vertical tunnel
 fn create_v_tunnel(y1: i32, y2: i32, x: i32, map: &mut Map) {
-    // vertical tunnel
     for y in cmp::min(y1, y2)..(cmp::max(y1, y2) + 1) {
         map[x as usize][y as usize] = Tile::empty();
     }
 }
 
-
+// Qianli: create rooms and tunnels randomly.
 fn make_map(objects: &mut Vec<Object>) -> Map {
     // fill map with "blocked" tiles
     let mut map = vec![vec![Tile::wall(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
@@ -333,6 +340,7 @@ fn make_map(objects: &mut Vec<Object>) -> Map {
                 objects[0].x = new_x;
                 objects[0].y = new_y;
 
+                // Qianli: put the player and npc in the same room while initializing the game(Location randomly)   
                 objects[1].x = rand::thread_rng().gen_range(new_room.x1 + 1, new_room.x2);
                 objects[1].y = rand::thread_rng().gen_range(new_room.y1 + 1, new_room.y2);
             } else {
@@ -362,7 +370,7 @@ fn make_map(objects: &mut Vec<Object>) -> Map {
     return map;
 }
 
-// test, whether play has touched the npc
+// Qianli: test, whether play has touched the npc
 fn can_survive(objects: &mut Vec<Object>) -> bool{
     let player = &objects[0];
     let npc = &objects[1];
@@ -375,6 +383,7 @@ fn can_survive(objects: &mut Vec<Object>) -> bool{
     }
 }
 
+// Qianli: let npc follow player and sleep for a while
 #[allow(dead_code)]
 fn AI_follow_player(objects: &mut [Object], game: &mut Game){
 
@@ -409,7 +418,6 @@ fn main() {
         .font("sprites.png" , FontLayout::Tcod)
         .font_type(FontType::Greyscale)
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
-
         .title("WindowName")
         .init();
 
@@ -421,13 +429,15 @@ fn main() {
 
     tcod::system::set_fps(LIMIT_FPS);
 
+    //thore: added atributes visable, direction health, images to all objects
     // create object representing the player
     let player = Object::new(0, 0, '@', WHITE, true, (0,1), 3, ['A','B','C','D']);
 
     // create a NPC
     let npc = Object::new(0, 0, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
 
-    // create a Weapon
+
+    //thore: create all Weapons
     let sword = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['E','F','G','H']);
     let shovel = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['I','J','K','L']);
     let bucket = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['M','M','M','M']);
@@ -435,6 +445,7 @@ fn main() {
     let arrow = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['R','S','T','U']);
 
     // the list of objects with those two
+    //thore: added weapon objects to list
     let mut objects: Vec<Object> = vec![player, npc, sword, shovel, bucket, bow, arrow];     
 
     let mut game = Game {
@@ -446,6 +457,7 @@ fn main() {
     while !tcod.root.window_closed() {
         tcod.con.clear();
 
+        //thore: check for animation
         animation(&mut objects);
         render_all(&mut tcod, &game, &mut objects);
         
@@ -453,10 +465,10 @@ fn main() {
 
         // handle keys and exit game if needed
         let exit = handle_keys(&mut tcod, &mut game, &mut objects);
-
+        
         AI_follow_player(&mut objects, &mut game);
         
+        // Qianli: check for the break condition
         if exit || can_survive(&mut objects) {break}
     }
-
 }
