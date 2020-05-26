@@ -177,15 +177,10 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
         }
         Key { code:Escape,.. } => return true,
 
-
     //thore: key querys for weapons
-        //Sword
         Key { code: Spacebar,.. } => weapon_query(SWORD,objects, game),
-        //Showel
         Key { code: Number1,.. } => weapon_query(SHOWEL,objects, game),
-        //Bucket
         Key { code: Number2,.. } => weapon_query(BUCKET,objects, game),
-        //Bow
         Key { code: Number3,.. } => weapon_query(BOW,objects, game),
         _ => {}
     }
