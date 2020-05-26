@@ -159,10 +159,7 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
 fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> bool {
 
     //thore: hide weapons after each new frame
-    objects[SWORD].visable = false;
-    objects[SHOWEL].visable = false;
-    objects[BUCKET].visable = false;
-    objects[BOW].visable = false;
+    weapon_query(0, objects, game);
 
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
@@ -183,55 +180,18 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
 
     //thore: key querys for weapons
         //Sword
-        Key { code: Spacebar,.. } => {
-            objects[SWORD].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[SWORD].visable = true;
-        }
-
+        Key { code: Spacebar,.. } => weapon_query(SWORD,objects, game),
         //Showel
-        Key { code: Number1,.. } => {
-            objects[SHOWEL].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[SHOWEL].visable = true;
-            if game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize].blocked {
-                objects[BUCKET].health += 1;
-                game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize] = Tile::empty();
-            };
-        }
-
+        Key { code: Number1,.. } => weapon_query(SHOWEL,objects, game),
         //Bucket
-        Key { code: Number2,.. } => {
-            objects[BUCKET].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[BUCKET].visable = true;
-            if objects[BUCKET].health > 1 {
-                objects[BUCKET].health -= 1;
-                game.map[(objects[BUCKET].x) as usize][(objects[BUCKET].y) as usize] = Tile::wall();
-            }
-        }
-
+        Key { code: Number2,.. } => weapon_query(BUCKET,objects, game),
         //Bow
-        Key { code: Number3,.. } => {
-            objects[BOW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            objects[BOW].visable = true;
-            if objects[BOW].health > 1 {
-                objects[BOW].health -= 1 ;
-                objects[ARROW].visable = true;
-                objects[ARROW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
-            }
-        }
-
+        Key { code: Number3,.. } => weapon_query(BOW,objects, game),
         _ => {}
     }
 
-    //thore: move arrow if visable
-    if objects[ARROW].visable {
-        objects[ARROW].move_by(objects[ARROW].direction.0,objects[ARROW].direction.1, game);
-    }
-
-    //thore: pick up arrow if player stands on it
-    if objects[PLAYER].collision(&objects[ARROW]) && objects[ARROW].visable{
-        objects[ARROW].visable = false;
-        objects[BOW].health += 1;
-    }
+    //thore: test for Arrow
+    weapon_query(ARROW, objects, game);
 
     return false;
 }
@@ -246,6 +206,68 @@ fn animation(objects: &mut [Object]){
             (-1,0) => object.char = object.images[2],
             (1,0) => object.char = object.images[3],
             _ => {}
+        }
+    }
+}
+
+//thore: weapon verhaltens und eigenschaften funktion
+fn weapon_query(weapon: usize,objects: &mut [Object], game: &mut Game){
+
+    //thore: zeige schwert und lass es vor dem player erscheinen
+    if weapon == SWORD{
+        objects[SWORD].visable = true;
+        objects[SWORD].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
+    }
+
+    //thore: showel
+    if weapon == SHOWEL{
+        objects[SHOWEL].visable = true;
+        objects[SHOWEL].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
+        if game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize].blocked {
+            objects[BUCKET].health += 1;
+            game.map[(objects[SHOWEL].x) as usize][(objects[SHOWEL].y) as usize] = Tile::empty();
+        };
+    }
+
+    //thore: bucket
+    if weapon == BUCKET{
+        objects[BUCKET].visable = true;
+        objects[BUCKET].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
+        if objects[BUCKET].health > 1 {
+            objects[BUCKET].health -= 1;
+            game.map[(objects[BUCKET].x) as usize][(objects[BUCKET].y) as usize] = Tile::wall();
+        }
+    }
+
+    //thore: bow
+    if weapon == BOW{
+        objects[BOW].visable = true;
+        objects[BOW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
+        if objects[BOW].health > 1 {
+            objects[BOW].health -= 1 ;
+            objects[ARROW].visable = true;
+            objects[ARROW].update(objects[PLAYER].x, objects[PLAYER].y, objects[PLAYER].direction);
+        }
+    }
+
+    //thore: hide all weapons after each farme
+    if weapon == 0{
+        objects[SWORD].visable = false;
+        objects[SHOWEL].visable = false;
+        objects[BUCKET].visable = false;
+        objects[BOW].visable = false;
+    }
+ 
+    if weapon == ARROW{
+        //thore: move arrow if visable
+        if objects[ARROW].visable {
+            objects[ARROW].move_by(objects[ARROW].direction.0,objects[ARROW].direction.1, game);
+        }
+
+        //thore: pick up arrow if player stands on it
+        if objects[PLAYER].collision(&objects[ARROW]) && objects[ARROW].visable{
+            objects[ARROW].visable = false;
+            objects[BOW].health += 1;
         }
     }
 }
@@ -434,7 +456,7 @@ fn main() {
     let player = Object::new(0, 0, '@', WHITE, true, (0,1), 3, ['A','B','C','D']);
 
     // create a NPC
-    let npc = Object::new(0, 0, 'S', RED, true, (0,1), 1, ['a','b','c','d']);
+    let npc = Object::new(0, 0, 'S', WHITE, true, (0,1), 1, ['W','W','W','W']);
 
 
     //thore: create all Weapons
