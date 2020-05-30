@@ -19,6 +19,9 @@ use rand::Rng;
 use tcod::colors::*;
 use tcod::console::*;
 
+// Qianli: import package for FovAlgorithm
+use tcod::map::{FovAlgorithm, Map as FovMap};
+
 const COLOR_DARK_WALL: Color = Color { r: 0, g: 0, b: 100 };
 const COLOR_DARK_GROUND: Color = Color { r: 50,g: 50,b: 150 };
 
@@ -30,14 +33,25 @@ const BUCKET: usize = 4;
 const ARROW: usize = 6;
 const BOW: usize = 5;
 
+// Qianli: Set the fov algorithm: Basic, Diamond, 
+// Shadow, Permissive and Digital
+const FOV_ALGO: FovAlgorithm = FovAlgorithm::Shadow;
+// whether ligth the wall 
+const FOV_LIGHT_WALLS: bool = true;
+const TORCH_RADIUS: i32 = 10;
+
+const COLOR_LIGHT_WALL: Color = Color{r: 130, g: 110, b: 50};
+const COLOR_LIGHT_GROUND: Color = Color{r: 200, g: 180, b: 50};
+
 struct Tcod {
     root: Root,
     con : Offscreen,
+    fov: FovMap,
 }
 
 //Generic object for player, enemys, items etc..
 //thore: visable, direction health, images attributes added
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Object {
     x: i32,
     y: i32,
@@ -112,11 +126,17 @@ struct Game {
     map: Map,
 }
 
-fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
+fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object], fov_recompute: bool) {
+    if(fov_recompute){
+        //recompute FOV if needed(the player has moved)
+        let player = &objects[0];
+        tcod.fov.compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
+    }
+
     // draw all objects in the list
     // thore: visable abfrage hinzugefügt, es muss sichtbar sein um gemalt zu werden
     for object in objects{
-        if object.visable && object.health > 0{
+        if object.visable && object.health > 0 && tcod.fov.is_in_fov(object.x, object.y){
             object.draw(&mut tcod.con);
         }
     }
@@ -160,6 +180,9 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
 
     //thore: hide weapons after each new frame
     weapon_query(0, objects, game);
+
+    // Qianli: start AI to follow the player 
+    AI_follow_player(objects, game);
 
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
@@ -442,6 +465,7 @@ fn main() {
     let mut tcod = Tcod { 
         root, 
         con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT), 
+        fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
     };
 
     tcod::system::set_fps(LIMIT_FPS);
@@ -452,7 +476,6 @@ fn main() {
 
     // create a NPC
     let npc = Object::new(0, 0, 'S', WHITE, true, (0,1), 1, ['W','W','W','W']);
-
 
     //thore: create all Weapons
     let sword = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['E','F','G','H']);
@@ -470,20 +493,38 @@ fn main() {
         map: make_map(&mut objects),
     };    
 
+    // populate the FOV map, according to the generated map
+    for y in 0..MAP_HEIGHT{
+        for x in 0..MAP_WIDTH{
+            tcod.fov.set(
+                x, y, 
+                !game.map[x as usize][y as usize].block_sight,
+                !game.map[x as usize][y as usize].blocked,
+            );
+        }
+    }
+
+    // forrce FOV recompute first time through the game loop
+    let mut previous_player_position = (-1, -1);
+
     //game loop
     while !tcod.root.window_closed() {
         tcod.con.clear();
 
         //thore: check for animation
         animation(&mut objects);
-        render_all(&mut tcod, &game, &mut objects);
+
+        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
+        render_all(&mut tcod, &game, &mut objects, fov_recompute);
         
         tcod.root.flush();
 
+        let palyer = &objects[0];
+
+        previous_player_position = (player.x, player.y);
+
         // handle keys and exit game if needed
         let exit = handle_keys(&mut tcod, &mut game, &mut objects);
-        
-        AI_follow_player(&mut objects, &mut game);
         
         // Qianli: check for the break condition
         if exit || can_survive(&mut objects) {break}
