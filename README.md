@@ -40,8 +40,8 @@ features = ["dynlib"]
 Download the picture "[sprites.png](https://github.com/qiaw99/rust_roguelike/blob/added-hud%2C-weapons-and-graphics/sprites.png)" and put it into the same directory of Cargo.toml.
 
 # Contributers:
-- Thore Brehmer
-- Qianli Wang
+- [Thore Brehmer](https://github.com/theroIdond)
+- [Qianli Wang](https://github.com/qiaw99)
 
 # License:
 This project is licensed under the MIT License - see the LICENSE file for details
