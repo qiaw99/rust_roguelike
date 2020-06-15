@@ -14,13 +14,28 @@ const MAX_ROOM: i32 = 30;
 // frame limit
 const LIMIT_FPS: i32 = 60;
 
+use tcod::map::{FovAlgorithm, Map as FovMap};
 use std::cmp;
 use rand::Rng;
 use tcod::colors::*;
 use tcod::console::*;
 
-// Qianli: import package for FovAlgorithm
-use tcod::map::{FovAlgorithm, Map as FovMap};
+//jonny: Konstanten für field of view
+const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic; // default FOV algorithm
+const FOV_LIGHT_WALLS: bool = true; // light walls or not
+const TORCH_RADIUS: i32 = 10;
+
+//jonny: Farben für das "Licht"
+const COLOR_LIGHT_WALL: Color = Color {
+    r: 130,
+    g: 110,
+    b: 50,
+};
+const COLOR_LIGHT_GROUND: Color = Color {
+    r: 200,
+    g: 180,
+    b: 50,
+};
 
 const COLOR_DARK_WALL: Color = Color { r: 0, g: 0, b: 100 };
 const COLOR_DARK_GROUND: Color = Color { r: 50,g: 50,b: 150 };
@@ -33,16 +48,6 @@ const BUCKET: usize = 4;
 const ARROW: usize = 6;
 const BOW: usize = 5;
 
-// Qianli: Set the fov algorithm: Basic, Diamond, 
-// Shadow, Permissive and Digital
-const FOV_ALGO: FovAlgorithm = FovAlgorithm::Shadow;
-// whether ligth the wall 
-const FOV_LIGHT_WALLS: bool = true;
-const TORCH_RADIUS: i32 = 10;
-
-const COLOR_LIGHT_WALL: Color = Color{r: 130, g: 110, b: 50};
-const COLOR_LIGHT_GROUND: Color = Color{r: 200, g: 180, b: 50};
-
 struct Tcod {
     root: Root,
     con : Offscreen,
@@ -51,7 +56,7 @@ struct Tcod {
 
 //Generic object for player, enemys, items etc..
 //thore: visable, direction health, images attributes added
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct Object {
     x: i32,
     y: i32,
@@ -83,6 +88,13 @@ impl Object {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
+    pub fn pos(&self) -> (i32, i32) { //jonny
+        (self.x, self.y)
+    }
+    pub fn set_pos(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    } //jonny
 
     //thore: funktion erstellt für weapons, damit sie an der richtigen stelle erscheinen (vor den gegnern)
     pub fn update(&mut self, x:i32, y:i32, direction:(i32,i32)){
@@ -101,6 +113,7 @@ impl Object {
 #[derive(Clone, Copy, Debug)]
 struct Tile {
     blocked: bool,
+    explored: bool, //jonny
     block_sight: bool,
 }
 
@@ -108,6 +121,7 @@ impl Tile {
     pub fn empty() -> Self {
         Tile {
             blocked: false,
+            explored: false, //jonny
             block_sight: false,
         }
     }
@@ -115,6 +129,7 @@ impl Tile {
     pub fn wall() -> Self {
         Tile {
             blocked: true,
+            explored: false, //jonny
             block_sight: true,
         }
     }
@@ -126,32 +141,53 @@ struct Game {
     map: Map,
 }
 
-fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object], fov_recompute: bool) {
-    if(fov_recompute){
-        //recompute FOV if needed(the player has moved)
-        let player = &objects[0];
-        tcod.fov.compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
+fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
+
+    if fov_recompute { //jonny
+        // recompute FOV if needed (the player moved or something)
+        let player = &objects[PLAYER];
+        tcod.fov
+            .compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
     }
 
     // draw all objects in the list
     // thore: visable abfrage hinzugefügt, es muss sichtbar sein um gemalt zu werden
-    for object in objects{
-        if object.visable && object.health > 0 && tcod.fov.is_in_fov(object.x, object.y){
-            object.draw(&mut tcod.con);
-        }
+   // for object in objects{
+        //if object.visable && object.health > 0{
+           // object.draw(&mut tcod.con);
+      //  }
+   // }
+    // draw all objects in the list
+    //jonny: 
+    for object in objects {
+        if tcod.fov.is_in_fov(object.x, object.y) && object.visable && object.health > 0 {
+             object.draw(&mut tcod.con);
     }
+}
     // go through all tiles, and set their background color
     //thore: die map wird erst ab map_start angefangen zu zeichnen, damit platz für das hud ist
     for y in MAP_START_HEIGHT..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
+            let visible = tcod.fov.is_in_fov(x, y);
             let wall = game.map[x as usize][y as usize].block_sight;
-            if wall {
-                tcod.con
-                    .set_char_background(x, y, COLOR_DARK_WALL, BackgroundFlag::Set);
-            } else {
-                tcod.con
-                    .set_char_background(x, y, COLOR_DARK_GROUND, BackgroundFlag::Set);
-            }
+            let color = match (visible, wall) {
+                // outside of field of view: jonny
+                (false, true) => COLOR_DARK_WALL,
+                (false, false) => COLOR_DARK_GROUND,
+                // inside fov:
+                (true, true) => COLOR_LIGHT_WALL,
+                (true, false) => COLOR_LIGHT_GROUND,
+            };
+            let explored = &mut game.map[x as usize][y as usize].explored;
+            if visible {
+                    // since it's visible, explore it
+                         *explored = true;
+                        }
+            if *explored {
+                     // show explored tiles only (any visible tile is explored already)
+                        tcod.con
+                         .set_char_background(x, y, color, BackgroundFlag::Set);
+}
         }
     }
 
@@ -180,9 +216,6 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object] ) -> boo
 
     //thore: hide weapons after each new frame
     weapon_query(0, objects, game);
-
-    // Qianli: start AI to follow the player 
-    AI_follow_player(objects, game);
 
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
@@ -230,6 +263,7 @@ fn animation(objects: &mut [Object]){
 
 //thore: weapon verhaltens und eigenschaften funktion
 fn weapon_query(weapon: usize,objects: &mut [Object], game: &mut Game){
+
 
     //thore: zeige schwert und lass es vor dem player erscheinen
     if weapon == SWORD{
@@ -446,7 +480,7 @@ fn AI_follow_player(objects: &mut [Object], game: &mut Game){
 
     use std::{thread, time};
     
-    let ten_millis = time::Duration::from_millis(10);
+    let ten_millis = time::Duration::from_millis(1);
 
     thread::sleep(ten_millis);
 }
@@ -464,8 +498,8 @@ fn main() {
     //Screen Console
     let mut tcod = Tcod { 
         root, 
-        con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT), 
-        fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
+        con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT),
+        fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT), //Jonny FOV 
     };
 
     tcod::system::set_fps(LIMIT_FPS);
@@ -477,6 +511,7 @@ fn main() {
     // create a NPC
     let npc = Object::new(0, 0, 'S', WHITE, true, (0,1), 1, ['W','W','W','W']);
 
+
     //thore: create all Weapons
     let sword = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['E','F','G','H']);
     let shovel = Object::new(0, 0, 'S', WHITE, false, (0,0), 1, ['I','J','K','L']);
@@ -487,44 +522,37 @@ fn main() {
     // the list of objects with those two
     //thore: added weapon objects to list
     let mut objects: Vec<Object> = vec![player, npc, sword, shovel, bucket, bow, arrow];     
-
     let mut game = Game {
         // generate map (at this point it's not drawn to the screen)
         map: make_map(&mut objects),
     };    
-
-    // populate the FOV map, according to the generated map
-    for y in 0..MAP_HEIGHT{
-        for x in 0..MAP_WIDTH{
+    //jonny: fov
+    for y in  MAP_START_HEIGHT..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
             tcod.fov.set(
-                x, y, 
+                x,
+                y,
                 !game.map[x as usize][y as usize].block_sight,
                 !game.map[x as usize][y as usize].blocked,
             );
         }
     }
-
-    // forrce FOV recompute first time through the game loop
-    let mut previous_player_position = (-1, -1);
-
+    let mut previous_player_position = (-1, -1); //jonny: FOV neu berechnen
     //game loop
     while !tcod.root.window_closed() {
         tcod.con.clear();
 
         //thore: check for animation
         animation(&mut objects);
-
-        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
-        render_all(&mut tcod, &game, &mut objects, fov_recompute);
+        let fov_recompute = previous_player_position != (objects[PLAYER].pos());//jonny
+        render_all(&mut tcod, &mut game, &mut objects, fov_recompute);
         
         tcod.root.flush();
-
-        let palyer = &objects[0];
-
-        previous_player_position = (player.x, player.y);
-
+        previous_player_position = objects[PLAYER].pos(); //jonny
         // handle keys and exit game if needed
         let exit = handle_keys(&mut tcod, &mut game, &mut objects);
+        
+        AI_follow_player(&mut objects, &mut game);
         
         // Qianli: check for the break condition
         if exit || can_survive(&mut objects) {break}
