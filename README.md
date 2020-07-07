@@ -42,6 +42,8 @@ Download the picture "[sprites.png](https://github.com/qiaw99/rust_roguelike/blo
 # Contributers:
 - [Thore Brehmer](https://github.com/theroIdond)
 - [Qianli Wang](https://github.com/qiaw99)
+- Jonny Lam
+- David Ly
 
 # License:
 This project is licensed under the MIT License - see the LICENSE file for details
