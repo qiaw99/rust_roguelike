@@ -68,7 +68,19 @@ struct Tcod {
     fov: FovMap,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+/// An object that can be equipped, yielding bonuses.
+struct Equipment {
+    slot: Slot,
+    equipped: bool,
+}
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+enum Slot {
+    LeftHand,
+    RightHand,
+    Head,
+}
 
 //Generic object for player, enemys, items etc..
 //thore: visable, direction health, images attributes added
@@ -82,6 +94,14 @@ struct Object {
     direction: (i32,i32),
     health: i32,
     images: [char;4],
+}
+
+enum Item {
+    Heal,
+    Lightning,
+    Confuse,
+    Fireball,
+    Equipment,
 }
 
 //thore: visable, direction health, images attributes added
@@ -248,6 +268,69 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         1.0,
     );
 
+}
+
+/// Equip object and show a message about it
+pub fn equip(&mut self, messages: &mut Messages) {
+    if self.item.is_none() {
+        messages.add(
+            format!("Can't equip {:?} because it's not an Item.", self),
+            RED,
+        );
+        return;
+    };
+    if let Some(ref mut equipment) = self.equipment {
+        if !equipment.equipped {
+            equipment.equipped = true;
+            messages.add(
+                format!("Equipped {} on {}.", self.name, equipment.slot),
+                LIGHT_GREEN,
+            );
+        }
+    } else {
+        messages.add(
+            format!("Can't equip {:?} because it's not an Equipment.", self),
+            RED,
+        );
+    }
+}
+
+/// Dequip object and show a message about it
+pub fn dequip(&mut self, messages: &mut Messages) {
+    if self.item.is_none() {
+        messages.add(
+            format!("Can't dequip {:?} because it's not an Item.", self),
+            RED,
+        );
+        return;
+    };
+    if let Some(ref mut equipment) = self.equipment {
+        if equipment.equipped {
+            equipment.equipped = false;
+            messages.add(
+                format!("Dequipped {} from {}.", self.name, equipment.slot),
+                LIGHT_YELLOW,
+            );
+        }
+    } else {
+        messages.add(
+            format!("Can't dequip {:?} because it's not an Equipment.", self),
+            RED,
+        );
+    }
+}
+
+fn get_equipped_in_slot(slot: Slot, inventory: &[Object]) -> Option<usize> {
+    for (inventory_id, item) in inventory.iter().enumerate() {
+        if item
+            .equipment
+            .as_ref()
+            .map_or(false, |e| e.equipped && e.slot == slot)
+        {
+            return Some(inventory_id);
+        }
+    }
+    None
 }
 
 fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut [Object], monsters: &mut [Object] ) -> bool {
